@@ -1,0 +1,112 @@
+========================================================================
+DOCUMENTO DE REQUERIMIENTOS: PLATAFORMA "AI PRODUCT MANAGER" (SaaS)
+========================================================================
+FECHA: 01 de Diciembre de 2024
+VERSION: 2.0 (Arquitectura Cloud Centralizada)
+STACK: Streamlit Cloud + GitHub + Google Gemini API
+
+------------------------------------------------------------------------
+1. VISIÓN GENERAL DEL SISTEMA
+------------------------------------------------------------------------
+El sistema es una aplicación web centralizada (Multi-Tenant) que permite evaluar 
+masivamente a estudiantes de administración. Funciona bajo el modelo de 
+"Configuración como Código".
+
+- Entorno de Desarrollo (Local): Google Colab (donde el alumno genera un JSON).
+- Entorno de Producción (Nube): Streamlit App (donde el alumno sube el JSON).
+
+El objetivo es que el estudiante "configure" un motor de IA existente, en lugar 
+de programar el servidor desde cero.
+
+------------------------------------------------------------------------
+2. ARQUITECTURA TÉCNICA
+------------------------------------------------------------------------
+2.1. FRONTEND & BACKEND (Monolito)
+   - Plataforma: Streamlit Community Cloud (conectado a GitHub).
+   - Lenguaje: Python 3.9+.
+   - Persistencia: Memoria Volátil (st.session_state) para la sesión de 90 min.
+   
+2.2. SERVICIOS EXTERNOS
+   - LLM Engine: Google Gemini 1.5 Flash (vía Google Generative AI SDK).
+   - Control de Versiones: GitHub (para alojar el código fuente del profesor).
+
+2.3. SEGURIDAD DE CREDENCIALES
+   - La API Key Maestra (Profesor) se almacena en "Streamlit Secrets".
+   - Los alumnos NO ven ni manipulan la API Key en producción.
+
+------------------------------------------------------------------------
+3. ROLES DE USUARIO
+------------------------------------------------------------------------
+A. ESTUDIANTE (Usuario Final)
+   - Accede con Correo y Token único.
+   - Sube su archivo de configuración (`solucion_final.json`).
+   - Recibe feedback automático inmediato (Nota preliminar).
+   - Interactúa con SU versión del chatbot (aislada de otros alumnos).
+
+B. PROFESOR (Administrador)
+   - Accede con credenciales maestras.
+   - Visualiza un Dashboard en tiempo real.
+   - Ve el progreso de la clase (quién ya entregó, notas automáticas).
+
+------------------------------------------------------------------------
+4. REQUERIMIENTOS FUNCIONALES
+------------------------------------------------------------------------
+
+[RF-01] AUTENTICACIÓN CENTRALIZADA
+   - El sistema debe validar credenciales contra un diccionario interno o 
+     archivo seguro.
+   - Debe soportar múltiples sesiones simultáneas (Multi-tenancy).
+
+[RF-02] MOTOR DE INGESTA (UPLOAD)
+   - Debe permitir la carga de archivos `.json`.
+   - Debe validar que el JSON tenga la estructura correcta:
+     {
+       "prompt":String, 
+       "guardrails":List[String], 
+       "hitl_limit":Int 
+     }
+
+[RF-03] SISTEMA DE AUTO-CORRECCIÓN (QA AUTOMÁTICO)
+   Al subir el archivo, el sistema debe ejecutar tests lógicos instantáneos:
+   1. Test de Seguridad: Verificar si la lista de guardrails contiene palabras clave 
+      esperadas (ej. "estafa", "robo").
+   2. Test de Riesgo: Verificar si el límite matemático calculado está dentro 
+      del rango aceptable (ej. entre 1400 y 1600).
+   3. Test de Prompting: Verificar longitud y calidad básica del texto.
+   -> Output: Una calificación visible (Score /14) y lista de feedback.
+
+[RF-04] LÓGICA DEL CHATBOT (PIEZAS DE LEGO)
+   El bot debe procesar cada mensaje en este orden estricto de prioridad:
+   
+   PRIORIDAD 1: GUARDRAILS (Seguridad)
+   - Si el mensaje contiene una palabra de la lista prohibida del alumno -> BLOQUEAR.
+   
+   PRIORIDAD 2: HITL (Riesgo Financiero)
+   - Si el mensaje contiene un monto numérico > al límite configurado -> PAUSAR/ESCALAR.
+   
+   PRIORIDAD 3: INTELIGENCIA ARTIFICIAL (GenAI)
+   - Si pasa los filtros anteriores, enviar el prompt a Google Gemini usando 
+     el "System Prompt" definido por el alumno.
+
+[RF-05] DASHBOARD DOCENTE
+   - Tabla resumen con: ID Alumno | Estado Entrega | Calificación Auto | Historial Chat.
+
+------------------------------------------------------------------------
+5. ESPECIFICACIÓN DEL ENTREGABLE (JSON)
+------------------------------------------------------------------------
+El archivo que genera el alumno en Colab debe seguir estrictamente este esquema:
+
+{
+  "student_version": "1.0",
+  "prompt": "Texto describiendo la personalidad del bot...",
+  "guardrails": ["lista", "de", "palabras", "prohibidas", "limpias"],
+  "hitl_limit": 1550  // Número entero calculado por regresión
+}
+
+------------------------------------------------------------------------
+6. CONSIDERACIONES DE IMPLEMENTACIÓN
+------------------------------------------------------------------------
+- El repositorio en GitHub debe contener `requirements.txt` y `streamlit_app.py`.
+- No se requiere base de datos SQL externa para este MVP (uso de RAM).
+- El sistema debe manejar excepciones (JSON corrupto, caída de API) sin detenerse.
+========================================================================
